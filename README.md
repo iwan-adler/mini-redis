@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/iwan-adler/mini-redis/actions/workflows/tests.yml/badge.svg)](https://github.com/iwan-adler/mini-redis/actions/workflows/tests.yml)
 
-A Redis-compatible key-value server written in Python with **asyncio and the standard library only**. It speaks the real Redis protocol (RESP2 *and* RESP3), so the **official `redis-py` client and `redis-cli` work with it unchanged**.
+A Redis-compatible key-value server written in Python with **asyncio and the standard library only**. It speaks the real Redis protocol (RESP2 *and* RESP3), so the **official `redis-py` client and `redis-cli` work with it unchanged**. CI checks both on every push.
 
 It also supports key expiry, pipelining and crash-safe **append-only-file persistence**. Its behaviour is checked against a **real Redis server in CI**.
 

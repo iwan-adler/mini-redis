@@ -36,3 +36,13 @@ jobs:
         env:
           REAL_REDIS_PORT: "6379"
         run: python -m pytest -v
+      - name: Smoke test with the real redis-cli
+        run: |
+          sudo apt-get install -y -qq redis-tools > /dev/null
+          python -m minikv --port 6380 &
+          for i in $(seq 1 20); do redis-cli -p 6380 PING > /dev/null 2>&1 && break; sleep 0.25; done
+          test "$(redis-cli -p 6380 SET greeting hello)" = "OK"
+          test "$(redis-cli -p 6380 GET greeting)" = "hello"
+          test "$(redis-cli -p 6380 INCRBY visits 5)" = "5"
+          test "$(redis-cli -p 6380 -3 GET missing)" = "(nil)"
+          echo "redis-cli works against mini-redis"
