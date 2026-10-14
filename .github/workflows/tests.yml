@@ -38,11 +38,13 @@ jobs:
         run: python -m pytest -v
       - name: Smoke test with the real redis-cli
         run: |
-          sudo apt-get install -y -qq redis-tools > /dev/null
+          # The official redis-cli from the redis:7 image, sharing the runner's network.
+          cli() { docker run --rm --network host redis:7 redis-cli -p 6380 "$@"; }
           python -m minikv --port 6380 &
-          for i in $(seq 1 20); do redis-cli -p 6380 PING > /dev/null 2>&1 && break; sleep 0.25; done
-          test "$(redis-cli -p 6380 SET greeting hello)" = "OK"
-          test "$(redis-cli -p 6380 GET greeting)" = "hello"
-          test "$(redis-cli -p 6380 INCRBY visits 5)" = "5"
-          test "$(redis-cli -p 6380 -3 GET missing)" = "(nil)"
-          echo "redis-cli works against mini-redis"
+          for i in $(seq 1 20); do cli PING > /dev/null 2>&1 && break; sleep 0.5; done
+          test "$(cli SET greeting hello)" = "OK"
+          test "$(cli GET greeting)" = "hello"
+          test "$(cli INCRBY visits 5)" = "5"
+          # Output captured by a script is "raw" (no "(nil)"), so ask for the formatted form.
+          test "$(cli --no-raw -3 GET missing)" = "(nil)"
+          echo "redis-cli works against mini-redis (RESP2 and RESP3)"
