@@ -48,3 +48,20 @@ jobs:
           # Output captured by a script is "raw" (no "(nil)"), so ask for the formatted form.
           test "$(cli --no-raw -3 GET missing)" = "(nil)"
           echo "redis-cli works against mini-redis (RESP2 and RESP3)"
+
+  cluster:
+    # Raft cluster mode: a long simulation sweep and a chaos run against real processes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Simulation, 500 seeds on 3 nodes and 500 on 5
+        run: |
+          python -m minikv.raft.sim --seeds 500 --nodes 3
+          python -m minikv.raft.sim --seeds 500 --nodes 5 --start 500
+      - name: Chaos test against real processes (kill -9, SIGSTOP, partitions)
+        run: python -m minikv.raft.chaos --nodes 5 --duration 30
