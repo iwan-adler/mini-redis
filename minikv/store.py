@@ -15,18 +15,36 @@ from collections.abc import Callable
 
 
 class Store:
-    def __init__(self, clock: Callable[[], float] = time.time) -> None:
+    """`clock` returns seconds; `ms_clock`, if given, returns milliseconds and wins.
+
+    `lazy_expire=False` makes reads side-effect free: an expired key looks absent but
+    stays in memory until purge_expired(). The replicated state machine needs this,
+    because a read evaluated at one node's wall-clock time must never change the state
+    that later log entries are applied to (see minikv/raft/statemachine.py).
+    """
+
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.time,
+        ms_clock: Callable[[], int] | None = None,
+        lazy_expire: bool = True,
+    ) -> None:
         self._clock = clock
+        self._ms_clock = ms_clock
+        self._lazy_expire = lazy_expire
         self._data: dict[bytes, bytes] = {}
         self._expires: dict[bytes, int] = {}  # key -> absolute expiry in Unix milliseconds
 
     def now_ms(self) -> int:
+        if self._ms_clock is not None:
+            return self._ms_clock()
         return int(self._clock() * 1000)
 
     def _alive(self, key: bytes) -> bool:
         deadline = self._expires.get(key)
         if deadline is not None and deadline <= self.now_ms():
-            self._remove(key)
+            if self._lazy_expire:
+                self._remove(key)
             return False
         return key in self._data
 
@@ -40,6 +58,8 @@ class Store:
         return self._data[key] if self._alive(key) else None
 
     def set(self, key: bytes, value: bytes, expire_at_ms: int | None = None, keep_ttl: bool = False) -> None:
+        if keep_ttl and not self._alive(key):
+            self._expires.pop(key, None)  # an expired key's old deadline must not carry over
         self._data[key] = value
         if expire_at_ms is not None:
             self._expires[key] = expire_at_ms
@@ -78,6 +98,14 @@ class Store:
 
     def persist(self, key: bytes) -> bool:
         return self._alive(key) and self._expires.pop(key, None) is not None
+
+    def purge_expired(self) -> int:
+        """Delete every key whose deadline has passed. Returns how many were deleted."""
+        now = self.now_ms()
+        expired = [k for k, deadline in self._expires.items() if deadline <= now]
+        for key in expired:
+            self._remove(key)
+        return len(expired)
 
     def active_expire_cycle(self, sample_size: int = 20, rng: random.Random | None = None) -> int:
         """Redis's algorithm: sample keys with a TTL, delete the expired ones, and repeat
